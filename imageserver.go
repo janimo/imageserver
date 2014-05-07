@@ -188,8 +188,8 @@ func initKeys() {
 	secring := filepath.Join(keydir, "image-signing", "secring.gpg")
 	s, err := os.Open(secring)
 	if err != nil {
-		log.Println("No secret keyring found, will not sign tarballs:", err.Error())
-		return
+		log.Printf("No secret keyring found in %s\n", keydir)
+		log.Fatal("Try go run generate_keys.go")
 	}
 	defer s.Close()
 
@@ -250,8 +250,7 @@ func startWebserver() {
 	}
 
 	if !exists(gpgPath) {
-		log.Println("No GPG keys found under www/gpg, try running go generate_keys.go")
-		return
+		log.Fatal("No GPG keys found under www/gpg, try running go generate_keys.go")
 	}
 	http.Handle("/", basicAuthHandler(credentials, http.StripPrefix("/", http.FileServer(http.Dir(wwwPath)))))
 	if httpPort != "" {
@@ -350,7 +349,8 @@ type Channel struct {
 func createIndices() {
 	f, err := os.Open(channelPath)
 	if err != nil {
-		log.Fatalln("Could not open channels file")
+		log.Println("Could not open channels file")
+		log.Fatal("Add devices and channels to config.ini then run imageserver --setupChannels")
 	}
 	channels := Channels{}
 	dec := json.NewDecoder(f)
