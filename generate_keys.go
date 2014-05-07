@@ -1,5 +1,3 @@
-// +build ignore
-
 package main
 
 import (
@@ -40,6 +38,7 @@ type Key struct {
 }
 
 // signFile creates a GPG detached ASCII armored signature (.asc file) for a given file
+// using the given key
 func signFile(path string, ent *openpgp.Entity) {
 	sigpath := path + ".asc"
 	reader, err := os.Open(path)
@@ -228,8 +227,7 @@ func init() {
 	os.MkdirAll(wwwKeyDir, 0700)
 }
 
-func main() {
-	log.SetFlags(0)
+func generateKeys() {
 	err := createGPGKeys()
 	if err != nil {
 		log.Fatal(err)

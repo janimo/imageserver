@@ -61,10 +61,11 @@ var (
 )
 
 var (
-	httpPort      string
-	httpsPort     string
-	configFile    string
-	setupChannels bool
+	httpPort    string
+	httpsPort   string
+	configFile  string
+	genChannels bool
+	genKeys     bool
 )
 
 func init() {
@@ -73,7 +74,8 @@ func init() {
 	flag.StringVar(&httpPort, "httpPort", "", "HTTP port. Overrides the value in the config file")
 	flag.StringVar(&httpsPort, "httpsPort", "", "HTTPS port. Overrides the value in the config file")
 	flag.StringVar(&configFile, "configFile", "config.ini", "Configuration file")
-	flag.BoolVar(&setupChannels, "setupChannels", false, "Create channels.json file from config.ini values")
+	flag.BoolVar(&genChannels, "genChannels", false, "Generate channels.json file from config.ini values")
+	flag.BoolVar(&genKeys, "genKeys", false, "Generate GPG keys and keychains")
 }
 
 func initPaths() {
@@ -111,7 +113,7 @@ func NewTarballEntry(name string, order int) *TarballEntry {
 func (e *TarballEntry) SetChecksum() {
 	b, err := ioutil.ReadFile(e.absPath)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal(err)
 	}
 	s := sha256.Sum256(b)
 	e.Checksum = fmt.Sprintf("%x", s)
@@ -120,7 +122,7 @@ func (e *TarballEntry) SetChecksum() {
 func (e *TarballEntry) SetSize() {
 	fi, err := os.Lstat(e.absPath)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal(err)
 	}
 	e.Size = fi.Size()
 }
@@ -137,26 +139,9 @@ func (e *TarballEntry) Update() {
 // The private key used to sign the tarballs
 var signingKey *openpgp.Entity
 
-// signFile creates a GPG detached ASCII armored signature (.asc file) for a given file
-func signFile(path string) {
-	if signingKey == nil {
-		return
-	}
-	sigpath := path + ".asc"
-	reader, err := os.Open(path)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	writer, err := os.Create(sigpath)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	openpgp.ArmoredDetachSign(writer, signingKey, reader, nil)
-}
-
 // createSignature creates a GPG detached ASCII armored signature file for the given file
 func (e *TarballEntry) CreateSignature() {
-	signFile(e.absPath)
+	signFile(e.absPath, signingKey)
 }
 
 // currentTimestamp returns the current UTC timestamp
@@ -175,12 +160,12 @@ func fileChanged(path string) {
 		}
 	}
 	if channelPath == path {
-		signFile(channelPath)
+		signFile(channelPath, signingKey)
 		createIndices()
 	}
 }
 
-func initKeys() {
+func loadKeys() {
 	keydir := os.Getenv("IMAGESERVER_GPGKEYDIR")
 	if keydir == "" {
 		keydir = filepath.Join(appRootPath, "keys", "gpg")
@@ -189,14 +174,13 @@ func initKeys() {
 	s, err := os.Open(secring)
 	if err != nil {
 		log.Printf("No secret keyring found in %s\n", keydir)
-		log.Fatal("Try go run generate_keys.go")
+		log.Fatal("Run imageserver -genKeys")
 	}
 	defer s.Close()
 
 	el, err := openpgp.ReadKeyRing(s)
 	if err != nil {
-		log.Println("Could not read secret keyring, will not sign tarballs:", err.Error())
-		return
+		log.Fatal("Could not read secret keyring, will not sign tarballs:", err)
 	}
 
 	for _, e := range el {
@@ -205,6 +189,9 @@ func initKeys() {
 			signingKey = e
 			return
 		}
+	}
+	if signingKey == nil {
+		log.Fatal("Could not find a signing identity in the keyring")
 	}
 }
 
@@ -281,7 +268,7 @@ func getUbuntuIndex(channel, device string) *IndexFile {
 	log.Printf("Fetching %s\n", indexURL)
 	resp, err := http.Get(indexURL)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 
@@ -289,7 +276,7 @@ func getUbuntuIndex(channel, device string) *IndexFile {
 	d := json.NewDecoder(resp.Body)
 	err = d.Decode(&v)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal(err)
 	}
 	return v
 }
@@ -324,11 +311,11 @@ func (index *IndexFile) save() {
 
 	b, err := json.MarshalIndent(index, "", "    ")
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal(err)
 	}
 
 	ioutil.WriteFile(index.path, b, 0644)
-	signFile(index.path)
+	signFile(index.path, signingKey)
 	log.Printf("Wrote %s\n", index.path)
 }
 
@@ -350,13 +337,13 @@ func createIndices() {
 	f, err := os.Open(channelPath)
 	if err != nil {
 		log.Println("Could not open channels file")
-		log.Fatal("Add devices and channels to config.ini then run imageserver --setupChannels")
+		log.Fatal("Add devices and channels to config.ini then run imageserver -genChannels")
 	}
 	channels := Channels{}
 	dec := json.NewDecoder(f)
 	err = dec.Decode(&channels)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal(err)
 	}
 
 	for c, v := range channels {
@@ -393,7 +380,7 @@ func createIndex(channel, device string) {
 	ubuntuIndex.path = filepath.Join(devicePath, "index.json")
 	ubuntuIndex.deviceTarball = deviceTarball(channel, device)
 	if ubuntuIndex.deviceTarball == nil {
-		log.Fatalln("Did not find a device tarball for", device, channel)
+		log.Fatal("Did not find a device tarball for", device, channel)
 	} else {
 		log.Println("Found tarball for", device, channel)
 	}
@@ -404,7 +391,7 @@ func createIndex(channel, device string) {
 
 func ensureSignatures() {
 	if exists(channelPath) {
-		signFile(channelPath)
+		signFile(channelPath, signingKey)
 	}
 }
 
@@ -424,7 +411,7 @@ func readConfig(path string) {
 	if exists(path) {
 		config, err = ini.LoadFile(path)
 		if err != nil {
-			log.Printf("Error loading config file: %s\n", err.Error())
+			log.Printf("Error loading config file: %s\n", err)
 			return
 		}
 	}
@@ -469,8 +456,10 @@ func setup() {
 	log.SetFlags(0)
 	initPaths()
 	readConfig(configFile)
-	initKeys()
-	ensureSignatures()
+	if !genKeys {
+		loadKeys()
+		ensureSignatures()
+	}
 }
 
 // periodically calls a given function at regular intervals
@@ -497,15 +486,15 @@ func (ch *Channels) save() {
 		log.Fatal(err)
 	}
 	ioutil.WriteFile(channelPath, b, 0644)
-	signFile(channelPath)
+	signFile(channelPath, signingKey)
 	log.Printf("Created %s\n", channelPath)
 }
 
-// createChannels creates a channels.json file from channel and device
+// generateChannels creates a channels.json file from channel and device
 // configuration from config.ini
-func createChannels() {
+func generateChannels() {
 	if exists(channelPath) {
-		log.Fatalln("channels.json already exists, not overwriting it.")
+		log.Fatal("channels.json already exists, not overwriting it.")
 	}
 	ch := &Channels{}
 
@@ -523,15 +512,19 @@ func createChannels() {
 
 func main() {
 	setup()
-	if setupChannels {
-		createChannels()
+	if genChannels {
+		generateChannels()
+		return
+	}
+	if genKeys {
+		generateKeys()
 		return
 	}
 	go periodically(10*time.Minute, createIndices)
 	startWebserver()
 	watcher, err := inotify.NewWatcher()
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal(err)
 	}
 
 	watcher.AddWatch(wwwPath, inotify.IN_CLOSE_WRITE|inotify.IN_MOVED_TO)
@@ -540,7 +533,7 @@ func main() {
 		case ev := <-watcher.Event:
 			fileChanged(ev.Name)
 		case err := <-watcher.Error:
-			log.Println(err.Error())
+			log.Println(err)
 		}
 	}
 }
