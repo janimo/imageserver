@@ -398,16 +398,22 @@ type BasicAuth struct {
 
 var credentials *BasicAuth
 
+var config ini.File
+
 // readConfig reads the options set in the config file
 func readConfig(path string) {
+	var err error
 	if exists(path) {
-		f, err := ini.LoadFile(path)
+		config, err = ini.LoadFile(path)
 		if err != nil {
 			log.Printf("Error loading config file: %s\n", err.Error())
 			return
 		}
-		readAuthCredentials(f)
-		readPorts(f)
+	}
+
+	if config != nil {
+		readAuthCredentials(config)
+		readPorts(config)
 	}
 }
 
