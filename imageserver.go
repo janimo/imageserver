@@ -56,13 +56,15 @@ var (
 	appRootPath string
 	wwwPath     string
 	poolPath    string
+	gpgPath     string
 	channelPath string
 )
 
 var (
-	httpPort   string
-	httpsPort  string
-	configFile string
+	httpPort      string
+	httpsPort     string
+	configFile    string
+	setupChannels bool
 )
 
 func init() {
@@ -71,12 +73,14 @@ func init() {
 	flag.StringVar(&httpPort, "httpPort", "", "HTTP port. Overrides the value in the config file")
 	flag.StringVar(&httpsPort, "httpsPort", "", "HTTPS port. Overrides the value in the config file")
 	flag.StringVar(&configFile, "configFile", "config.ini", "Configuration file")
+	flag.BoolVar(&setupChannels, "setupChannels", false, "Create channels.json file from config.ini values")
 }
 
 func initPaths() {
 	wwwPath = filepath.Join(appRootPath, "www")
 	poolPath = filepath.Join(wwwPath, "pool")
 	os.MkdirAll(poolPath, 0755)
+	gpgPath = filepath.Join(wwwPath, "gpg")
 	channelPath = filepath.Join(wwwPath, "channels.json")
 }
 
@@ -244,6 +248,11 @@ func startWebserver() {
 		log.Println("No HTTP or HTTPS ports specified, not starting a web server")
 		return
 	}
+
+	if !exists(gpgPath) {
+		log.Println("No GPG keys found under www/gpg, try running go generate_keys.go")
+		return
+	}
 	http.Handle("/", basicAuthHandler(credentials, http.StripPrefix("/", http.FileServer(http.Dir(wwwPath)))))
 	if httpPort != "" {
 		log.Printf("Starting HTTP server on port %s\n", httpPort)
@@ -258,6 +267,7 @@ func startWebserver() {
 		cert := filepath.Join(certdir, "cert.pem")
 		if !exists(key) || !exists(cert) {
 			log.Printf("Missing TLS certificates in %s, not starting HTTPS server\n", certdir)
+			log.Println("Try go run generate_cert.go")
 			return
 		}
 		log.Printf("Starting HTTPS server on port %s, using TLS certificates in %s\n", httpsPort, certdir)
@@ -387,7 +397,9 @@ func createIndex(channel, device string) {
 }
 
 func ensureSignatures() {
-	signFile(channelPath)
+	if exists(channelPath) {
+		signFile(channelPath)
+	}
 }
 
 type BasicAuth struct {
