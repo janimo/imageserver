@@ -380,9 +380,9 @@ func createIndex(channel, device string) {
 	ubuntuIndex.path = filepath.Join(devicePath, "index.json")
 	ubuntuIndex.deviceTarball = deviceTarball(channel, device)
 	if ubuntuIndex.deviceTarball == nil {
-		log.Fatal("Did not find a device tarball for", device, channel)
+		log.Fatalf("Did not find a device tarball for %s %s\n", device, channel)
 	} else {
-		log.Println("Found tarball for", device, channel)
+		log.Printf("Found tarball for %s %s\n", device, channel)
 	}
 	ubuntuIndex.fixupLinks()
 	ubuntuIndex.update()
