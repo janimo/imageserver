@@ -334,10 +334,16 @@ func (index *IndexFile) save() {
 }
 
 // Channels is the type of data represented by channels.json
-type Channels map[string]struct {
-	Devices map[string]struct {
-		Index string
-	}
+type Channels map[string]Channel
+
+// Device represents one device
+type Device struct {
+	Index string `json:"index"`
+}
+
+// Channel represents one channel
+type Channel struct {
+	Devices map[string]Device `json:"devices"`
 }
 
 // createIndices creates index.json files for all devices mentioned in channels.json
@@ -476,8 +482,51 @@ func periodically(period time.Duration, f func()) {
 	}
 }
 
+func (ch Channels) add(channel, device string) {
+	c, ok := ch[channel]
+	if !ok {
+		ch[channel] = Channel{Devices: map[string]Device{}}
+		c = ch[channel]
+	}
+	c.Devices[device] = Device{Index: "/" + channel + "/" + device + "/index.json"}
+}
+
+func (ch *Channels) save() {
+	b, err := json.MarshalIndent(ch, "", "     ")
+	if err != nil {
+		log.Fatal(err)
+	}
+	ioutil.WriteFile(channelPath, b, 0644)
+	signFile(channelPath)
+	log.Printf("Created %s\n", channelPath)
+}
+
+// createChannels creates a channels.json file from channel and device
+// configuration from config.ini
+func createChannels() {
+	if exists(channelPath) {
+		log.Fatalln("channels.json already exists, not overwriting it.")
+	}
+	ch := &Channels{}
+
+	channels, _ := config.Get("channels", "channels")
+	devices, _ := config.Get("channels", "devices")
+
+	for _, c := range strings.Split(channels, ",") {
+		for _, d := range strings.Split(devices, ",") {
+			ch.add(c, d)
+		}
+	}
+
+	ch.save()
+}
+
 func main() {
 	setup()
+	if setupChannels {
+		createChannels()
+		return
+	}
 	go periodically(10*time.Minute, createIndices)
 	startWebserver()
 	watcher, err := inotify.NewWatcher()
