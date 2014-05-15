@@ -456,7 +456,6 @@ func readAuthCredentials(f ini.File) {
 // setup does various initializations at program startup
 func setup() {
 	flag.Parse()
-	log.SetFlags(0)
 	initPaths()
 	readConfig(configFile)
 	if !genKeys {
