@@ -263,12 +263,12 @@ func startWebserver() {
 
 // getUbuntuIndex fetches the latest official index.json for the given channel and device
 // FIXME - do not call multiple time for the same chan/dev combo
-func getUbuntuIndex(channel, device string) *IndexFile {
+func getUbuntuIndex(channel, device string) (*IndexFile, error) {
 	indexURL := fmt.Sprintf("%s/ubuntu-touch/%s/%s/index.json", UBUNTU_SERVER, channel, device)
 	log.Printf("Fetching %s\n", indexURL)
 	resp, err := http.Get(indexURL)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -276,9 +276,9 @@ func getUbuntuIndex(channel, device string) *IndexFile {
 	d := json.NewDecoder(resp.Body)
 	err = d.Decode(&v)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return v
+	return v, nil
 }
 
 //fixupLinks changes relative links in the index file to point to the Ubuntu server URLs
@@ -374,7 +374,10 @@ func deviceTarball(channel, device string) (tarball *TarballEntry) {
 
 // createIndex fetches an Ubuntu index.json file and modifies for local use
 func createIndex(channel, device string) {
-	ubuntuIndex := getUbuntuIndex(channel, "mako")
+	ubuntuIndex, err := getUbuntuIndex(channel, "mako")
+	if err != nil {
+		return
+	}
 	devicePath := filepath.Join(wwwPath, channel, device)
 	os.MkdirAll(devicePath, 0755)
 	ubuntuIndex.path = filepath.Join(devicePath, "index.json")
