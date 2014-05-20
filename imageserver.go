@@ -530,6 +530,7 @@ func main() {
 	}
 
 	watcher.AddWatch(wwwPath, inotify.IN_CLOSE_WRITE|inotify.IN_MOVED_TO)
+	watcher.AddWatch(poolPath, inotify.IN_CLOSE_WRITE|inotify.IN_MOVED_TO)
 	for {
 		select {
 		case ev := <-watcher.Event:
