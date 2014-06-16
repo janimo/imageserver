@@ -264,7 +264,10 @@ func startWebserver() {
 // getUbuntuIndex fetches the latest official index.json for the given channel and device
 // FIXME - do not call multiple time for the same chan/dev combo
 func getUbuntuIndex(channel, device string) (*IndexFile, error) {
-	indexURL := fmt.Sprintf("%s/ubuntu-touch/%s/%s/index.json", UBUNTU_SERVER, channel, device)
+	if !strings.HasPrefix(channel, "ubuntu-touch") {
+		channel = "ubuntu-touch/" + channel
+	}
+	indexURL := fmt.Sprintf("%s/%s/%s/index.json", UBUNTU_SERVER, channel, device)
 	log.Printf("Fetching %s\n", indexURL)
 	resp, err := http.Get(indexURL)
 	if err != nil {
