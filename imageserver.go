@@ -32,8 +32,10 @@ type IndexFile struct {
 	Images        []Image           `json:"images"`
 	path          string
 	deviceTarball *TarballEntry
+	customTarball *TarballEntry
 }
 
+// Image represents a given image within a channel
 type Image struct {
 	Base        int             `json:"base,omitempty"`
 	Description string          `json:"description"`
@@ -42,6 +44,7 @@ type Image struct {
 	Version     int             `json:"version"`
 }
 
+// TarballEntry represents a tarball within an image
 type TarballEntry struct {
 	Checksum    string `json:"checksum"`
 	Order       int    `json:"order"`
@@ -110,6 +113,7 @@ func NewTarballEntry(name string, order int) *TarballEntry {
 	return e
 }
 
+// SetChecksum recalculates the SHA256 hash of the tarball
 func (e *TarballEntry) SetChecksum() {
 	b, err := ioutil.ReadFile(e.absPath)
 	if err != nil {
@@ -119,6 +123,7 @@ func (e *TarballEntry) SetChecksum() {
 	e.Checksum = fmt.Sprintf("%x", s)
 }
 
+// SetSize updates the size field of the tarball
 func (e *TarballEntry) SetSize() {
 	fi, err := os.Lstat(e.absPath)
 	if err != nil {
@@ -127,6 +132,7 @@ func (e *TarballEntry) SetSize() {
 	e.Size = fi.Size()
 }
 
+// Update updates the tarball entry fields
 func (e *TarballEntry) Update() {
 	if e.needsUpdate {
 		e.SetChecksum()
@@ -297,12 +303,21 @@ func (index *IndexFile) fixupLinks() {
 // update updates the index file when relevant files change
 func (index *IndexFile) update() {
 	index.deviceTarball.Update()
+	if index.customTarball != nil {
+		index.customTarball.Update()
+	}
 	index.Global["generated_at"] = currentTimestamp()
 
 	if !strings.HasSuffix(filepath.Base(filepath.Dir(index.path)), "mako") {
 		for _, img := range index.Images {
 			if img.Type == FULL_IMAGE {
+				// replace the device tarball entry
 				img.Files[1] = index.deviceTarball
+				// replace the custom tarball entry.
+				// FIXME: assumption that 4 entries mean there's a custom tarball in there
+				if index.customTarball != nil && len(img.Files) == 4 {
+					img.Files[2] = index.customTarball
+				}
 			}
 		}
 	}
@@ -369,6 +384,7 @@ func findTarball(channel, device, pattern string) (tarball *TarballEntry) {
 	for _, name := range candidates {
 		tarball = NewTarballEntry(name, 1)
 		if tarball != nil {
+			log.Printf("Found %s tarball for %s %s\n", pattern, device, channel)
 			break
 		}
 	}
@@ -387,9 +403,8 @@ func createIndex(channel, device string) {
 	ubuntuIndex.deviceTarball = findTarball(channel, device, "device")
 	if ubuntuIndex.deviceTarball == nil {
 		log.Fatalf("Did not find a device tarball for %s %s\n", device, channel)
-	} else {
-		log.Printf("Found tarball for %s %s\n", device, channel)
 	}
+	ubuntuIndex.customTarball = findTarball(channel, device, "custom")
 	ubuntuIndex.fixupLinks()
 	ubuntuIndex.update()
 	ubuntuIndices = append(ubuntuIndices, ubuntuIndex)
@@ -401,6 +416,7 @@ func ensureSignatures() {
 	}
 }
 
+// BasicAuth is used to support HTTP Basic Access Authentication
 type BasicAuth struct {
 	realm    string
 	username string
