@@ -356,15 +356,15 @@ func createIndices() {
 	}
 }
 
-// deviceTarball finds the tarball for a device/channel combination
-// to be used as the device link in the respective index.json
+// findTarball finds a tarball for a device/channel/pattern combination
+// to be used as the device or custom tarball entry in the respective index.json
 // The name can be device_mako_trusty-proposed.tar.xz, device_mako.tar.xz or just device.tar.xz
-func deviceTarball(channel, device string) (tarball *TarballEntry) {
+func findTarball(channel, device, pattern string) (tarball *TarballEntry) {
 	//From most specific to most general name
 	candidates := []string{
-		"device_" + device + "_" + channel,
-		"device_" + device,
-		"device",
+		pattern + "_" + device + "_" + channel,
+		pattern + "_" + device,
+		pattern,
 	}
 	for _, name := range candidates {
 		tarball = NewTarballEntry(name, 1)
@@ -384,7 +384,7 @@ func createIndex(channel, device string) {
 	devicePath := filepath.Join(wwwPath, channel, device)
 	os.MkdirAll(devicePath, 0755)
 	ubuntuIndex.path = filepath.Join(devicePath, "index.json")
-	ubuntuIndex.deviceTarball = deviceTarball(channel, device)
+	ubuntuIndex.deviceTarball = findTarball(channel, device, "device")
 	if ubuntuIndex.deviceTarball == nil {
 		log.Fatalf("Did not find a device tarball for %s %s\n", device, channel)
 	} else {
