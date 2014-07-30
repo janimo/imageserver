@@ -20,6 +20,8 @@ import (
 	"code.google.com/p/go.exp/inotify"
 )
 
+const APP_VERSION = "0.1"
+
 const (
 	FULL_IMAGE    = "full"
 	DELTA_IMAGE   = "delta"
@@ -532,6 +534,7 @@ func generateChannels() {
 }
 
 func main() {
+	fmt.Printf("Starting imageserver %s\n", APP_VERSION)
 	setup()
 	if genChannels {
 		generateChannels()
