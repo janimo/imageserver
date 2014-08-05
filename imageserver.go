@@ -85,6 +85,7 @@ var (
 )
 
 var (
+	hostName    string
 	httpPort    string
 	httpsPort   string
 	configFile  string
@@ -462,7 +463,13 @@ func readConfig(path string) {
 	if config != nil {
 		readAuthCredentials(config)
 		readPorts(config)
+		readHostname(config)
 	}
+}
+
+// read hostname from the config file
+func readHostname(f ini.File) {
+	hostName, _ = f.Get("server", "hostname")
 }
 
 // readPorts reads the HTTP and HTTPS ports from the config file
