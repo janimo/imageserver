@@ -54,6 +54,7 @@ type IndexFile struct {
 	path          string
 	deviceTarball *TarballEntry
 	customTarball *TarballEntry
+	isCustom      bool
 }
 
 // Image represents a given image within a channel
@@ -325,7 +326,7 @@ func (index *IndexFile) fixupLinks() {
 // update updates the index file when relevant files change
 func (index *IndexFile) update() {
 	index.deviceTarball.Update()
-	if index.customTarball != nil {
+	if index.isCustom {
 		index.customTarball.Update()
 	}
 	index.Global["generated_at"] = currentTimestamp()
@@ -337,7 +338,7 @@ func (index *IndexFile) update() {
 				img.Files[1] = index.deviceTarball
 				// replace the custom tarball entry.
 				// FIXME: assumption that 4 entries mean there's a custom tarball in there
-				if index.customTarball != nil && len(img.Files) == 4 {
+				if index.isCustom {
 					img.Files[2] = index.customTarball
 				}
 			}
@@ -422,11 +423,17 @@ func createIndex(channel, device string) {
 	devicePath := filepath.Join(wwwPath, channel, device)
 	os.MkdirAll(devicePath, 0755)
 	ubuntuIndex.path = filepath.Join(devicePath, "index.json")
+
 	ubuntuIndex.deviceTarball = findTarball(channel, device, "device")
 	if ubuntuIndex.deviceTarball == nil {
 		log.Fatalf("Did not find a device tarball for %s %s\n", device, channel)
 	}
+
 	ubuntuIndex.customTarball = findTarball(channel, device, "custom")
+	ubuntuIndex.isCustom = ubuntuIndex.customTarball != nil &&
+		len(ubuntuIndex.Images) > 0 &&
+		len(ubuntuIndex.Images[0].Files) == 4
+
 	ubuntuIndex.fixupLinks()
 	ubuntuIndex.update()
 	ubuntuIndices = append(ubuntuIndices, ubuntuIndex)
