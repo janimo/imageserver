@@ -118,8 +118,8 @@ func exists(path string) bool {
 }
 
 // NewTarballEntry creates a tarball of a given name
-func NewTarballEntry(name string, order int) *TarballEntry {
-	path := filepath.Join("/", "pool", name) + ".tar.xz"
+func NewTarballEntry(name string, dir string, order int) *TarballEntry {
+	path := filepath.Join(dir, name) + ".tar.xz"
 	absPath := filepath.Join(wwwPath, path)
 	log.Println("Looking for ", absPath)
 	if !exists(absPath) {
@@ -399,12 +399,12 @@ func createIndices() {
 func findTarball(channel, device, pattern string) (tarball *TarballEntry) {
 	//From most specific to most general name
 	candidates := []string{
-		pattern + "_" + device + "_" + channel,
+		pattern + "_" + device + "_" + strings.Replace(channel, "/", "_", -1),
 		pattern + "_" + device,
 		pattern,
 	}
 	for _, name := range candidates {
-		tarball = NewTarballEntry(name, 1)
+		tarball = NewTarballEntry(name, "/pool", 1)
 		if tarball != nil {
 			log.Printf("Found %s tarball for %s %s\n", pattern, device, channel)
 			break
