@@ -562,7 +562,10 @@ func generateChannels() {
 	ch := &Channels{}
 
 	channels, _ := config.Get("channels", "channels")
+	channels = strings.Replace(channels, " ", "", -1)
+
 	devices, _ := config.Get("channels", "devices")
+	devices = strings.Replace(devices, " ", "", -1)
 
 	for _, c := range strings.Split(channels, ",") {
 		for _, d := range strings.Split(devices, ",") {
