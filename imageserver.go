@@ -86,12 +86,13 @@ var (
 )
 
 var (
-	hostName    string
-	httpPort    string
-	httpsPort   string
-	configFile  string
-	genChannels bool
-	genKeys     bool
+	upstreamDevice string
+	hostName       string
+	httpPort       string
+	httpsPort      string
+	configFile     string
+	genChannels    bool
+	genKeys        bool
 )
 
 func init() {
@@ -416,7 +417,7 @@ func findTarball(channel, device, pattern string) (tarball *TarballEntry) {
 
 // createIndex fetches an Ubuntu index.json file and modifies for local use
 func createIndex(channel, device string) {
-	ubuntuIndex, err := getUbuntuIndex(channel, "mako")
+	ubuntuIndex, err := getUbuntuIndex(channel, upstreamDevice)
 	if err != nil {
 		return
 	}
@@ -471,7 +472,13 @@ func readConfig(path string) {
 		readAuthCredentials(config)
 		readPorts(config)
 		readHostname(config)
+		readUpstreamDevice(config)
 	}
+}
+
+// read upstream device channels to mirror from the config file
+func readUpstreamDevice(f ini.File) {
+	upstreamDevice, _ = f.Get("upstream", "device")
 }
 
 // read hostname from the config file
