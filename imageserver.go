@@ -186,7 +186,7 @@ var ubuntuIndices = make([]*IndexFile, 0)
 
 func fileChanged(path string) {
 	for _, index := range ubuntuIndices {
-		if index.deviceTarball != nil && index.deviceTarball.absPath == path {
+		if replaceDevice && index.deviceTarball != nil && index.deviceTarball.absPath == path {
 			index.deviceTarball.needsUpdate = true
 			index.update()
 		}
@@ -332,7 +332,9 @@ func (index *IndexFile) fixupLinks() {
 
 // update updates the index file when relevant files change
 func (index *IndexFile) update() {
-	index.deviceTarball.Update()
+	if replaceDevice {
+		index.deviceTarball.Update()
+	}
 	if index.isCustom {
 		index.customTarball.Update()
 	}
@@ -347,7 +349,7 @@ func (index *IndexFile) update() {
 				}
 				// replace the custom tarball entry.
 				// FIXME: assumption that 4 entries mean there's a custom tarball in there
-				if replaceCustom && index.isCustom {
+				if index.isCustom {
 					img.Files[2] = index.customTarball
 				}
 			}
@@ -434,16 +436,18 @@ func createIndex(channel, device string) {
 	os.MkdirAll(devicePath, 0755)
 	ubuntuIndex.path = filepath.Join(devicePath, "index.json")
 
-	ubuntuIndex.deviceTarball = findTarball(channel, device, "device")
-	if ubuntuIndex.deviceTarball == nil {
-		log.Fatalf("Did not find a device tarball for %s %s\n", device, channel)
+	if replaceDevice {
+		ubuntuIndex.deviceTarball = findTarball(channel, device, "device")
+		if ubuntuIndex.deviceTarball == nil {
+			log.Fatalf("Did not find a device tarball for %s %s\n", device, channel)
+		}
 	}
-
-	ubuntuIndex.customTarball = findTarball(channel, device, "custom")
-	ubuntuIndex.isCustom = ubuntuIndex.customTarball != nil &&
-		len(ubuntuIndex.Images) > 0 &&
-		len(ubuntuIndex.Images[0].Files) == 4
-
+	if replaceCustom {
+		ubuntuIndex.customTarball = findTarball(channel, device, "custom")
+		ubuntuIndex.isCustom = replaceCustom && ubuntuIndex.customTarball != nil &&
+			len(ubuntuIndex.Images) > 0 &&
+			len(ubuntuIndex.Images[0].Files) == 4
+	}
 	ubuntuIndex.fixupLinks()
 	ubuntuIndex.update()
 	ubuntuIndices = append(ubuntuIndices, ubuntuIndex)
