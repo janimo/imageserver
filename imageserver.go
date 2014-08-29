@@ -39,7 +39,7 @@ import (
 	"code.google.com/p/go.exp/inotify"
 )
 
-const APP_VERSION = "0.1"
+const APP_VERSION = "0.2"
 
 const (
 	FULL_IMAGE    = "full"
