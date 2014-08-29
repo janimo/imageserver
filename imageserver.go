@@ -188,6 +188,10 @@ func fileChanged(path string) {
 			index.deviceTarball.needsUpdate = true
 			index.update()
 		}
+		if index.isCustom && index.customTarball.absPath == path {
+			index.customTarball.needsUpdate = true
+			index.update()
+		}
 	}
 	if channelPath == path {
 		signFile(channelPath, signingKey)
