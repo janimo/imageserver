@@ -388,6 +388,7 @@ func createIndices() {
 		log.Fatal(err)
 	}
 
+	ubuntuIndices = make([]*IndexFile, 0)
 	for c, v := range channels {
 		for d := range v.Devices {
 			go createIndex(c, d)
