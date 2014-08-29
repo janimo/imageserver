@@ -87,6 +87,8 @@ var (
 
 var (
 	upstreamDevice string
+	replaceDevice  bool
+	replaceCustom  bool
 	hostName       string
 	httpPort       string
 	httpsPort      string
@@ -339,11 +341,13 @@ func (index *IndexFile) update() {
 	if !strings.HasSuffix(filepath.Base(filepath.Dir(index.path)), "mako") {
 		for _, img := range index.Images {
 			if img.Type == FULL_IMAGE {
-				// replace the device tarball entry
-				img.Files[1] = index.deviceTarball
+				if replaceDevice {
+					// replace the device tarball entry
+					img.Files[1] = index.deviceTarball
+				}
 				// replace the custom tarball entry.
 				// FIXME: assumption that 4 entries mean there's a custom tarball in there
-				if index.isCustom {
+				if replaceCustom && index.isCustom {
 					img.Files[2] = index.customTarball
 				}
 			}
@@ -484,6 +488,14 @@ func readConfig(path string) {
 // read upstream device channels to mirror from the config file
 func readUpstreamDevice(f ini.File) {
 	upstreamDevice, _ = f.Get("upstream", "device")
+	replDevice, _ := f.Get("upstream", "replace_device")
+	if replDevice == "true" {
+		replaceDevice = true
+	}
+	replCustom, _ := f.Get("upstream", "replace_custom")
+	if replCustom == "true" {
+		replaceCustom = true
+	}
 }
 
 // read hostname from the config file
