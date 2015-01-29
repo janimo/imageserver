@@ -39,12 +39,12 @@ import (
 	"code.google.com/p/go.exp/inotify"
 )
 
-const APP_VERSION = "0.2"
+const appVersion = "0.2"
 
 const (
-	FULL_IMAGE    = "full"
-	DELTA_IMAGE   = "delta"
-	UBUNTU_SERVER = "http://system-image.ubuntu.com"
+	fullImage    = "full"
+	deltaImage   = "delta"
+	ubuntuServer = "http://system-image.ubuntu.com"
 )
 
 // IndexFile represents a per-device/per-channel index.json
@@ -171,7 +171,7 @@ func (e *TarballEntry) Update() {
 // The private key used to sign the tarballs
 var signingKey *openpgp.Entity
 
-// createSignature creates a GPG detached ASCII armored signature file for the given file
+// CreateSignature creates a GPG detached ASCII armored signature file for the given file
 func (e *TarballEntry) CreateSignature() {
 	signFile(e.absPath, signingKey)
 }
@@ -303,7 +303,7 @@ func getUbuntuIndex(channel, device string) (*IndexFile, error) {
 	if !strings.HasPrefix(channel, "ubuntu-touch") {
 		channel = "ubuntu-touch/" + channel
 	}
-	indexURL := fmt.Sprintf("%s/%s/%s/index.json", UBUNTU_SERVER, channel, device)
+	indexURL := fmt.Sprintf("%s/%s/%s/index.json", ubuntuServer, channel, device)
 	log.Printf("Fetching %s\n", indexURL)
 	resp, err := http.Get(indexURL)
 	if err != nil {
@@ -324,8 +324,8 @@ func getUbuntuIndex(channel, device string) (*IndexFile, error) {
 func (index *IndexFile) fixupLinks() {
 	for _, img := range index.Images {
 		for _, f := range img.Files {
-			f.Path = UBUNTU_SERVER + f.Path
-			f.Signature = UBUNTU_SERVER + f.Signature
+			f.Path = ubuntuServer + f.Path
+			f.Signature = ubuntuServer + f.Signature
 		}
 	}
 }
@@ -342,7 +342,7 @@ func (index *IndexFile) update() {
 
 	if !strings.HasSuffix(filepath.Base(filepath.Dir(index.path)), "mako") {
 		for _, img := range index.Images {
-			if img.Type == FULL_IMAGE {
+			if img.Type == fullImage {
 				if replaceDevice {
 					// replace the device tarball entry
 					img.Files[1] = index.deviceTarball
@@ -598,7 +598,7 @@ func generateChannels() {
 }
 
 func main() {
-	fmt.Printf("Starting imageserver %s\n", APP_VERSION)
+	fmt.Printf("Starting imageserver %s\n", appVersion)
 	setup()
 	if genChannels {
 		generateChannels()

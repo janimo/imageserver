@@ -39,7 +39,7 @@ const (
 	wwwKeyDir    = "www/gpg"
 )
 
-type KeyringJson struct {
+type keyringJSON struct {
 	Expiry int64  `json:"expiry,omitempty"`
 	Type   string `json:"type"`
 }
@@ -102,12 +102,12 @@ func (k *Key) generate() error {
 	if err = ent.Serialize(pubring); err != nil {
 		return err
 	}
-	k.writeKeyringJson()
+	k.writeKeyringJSON()
 	return nil
 }
 
-func (k *Key) writeKeyringJson() error {
-	kr := &KeyringJson{Type: k.typ}
+func (k *Key) writeKeyringJSON() error {
+	kr := &keyringJSON{Type: k.typ}
 	if k.expiry != nil {
 		kr.Expiry = k.expiry.Unix()
 	}
