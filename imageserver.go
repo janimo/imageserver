@@ -33,7 +33,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vaughan0/go-ini"
+	"gopkg.in/yaml.v2"
 
 	"code.google.com/p/go.crypto/openpgp"
 	"code.google.com/p/go.exp/inotify"
@@ -83,18 +83,12 @@ var (
 	poolPath    string
 	gpgPath     string
 	channelPath string
-)
 
-var (
-	upstreamDevice string
-	replaceDevice  bool
-	replaceCustom  bool
-	hostName       string
-	httpPort       string
-	httpsPort      string
-	configFile     string
-	genChannels    bool
-	genKeys        bool
+	httpPort    string
+	httpsPort   string
+	configFile  string
+	genChannels bool
+	genKeys     bool
 )
 
 func init() {
@@ -102,8 +96,8 @@ func init() {
 	flag.StringVar(&appRootPath, "root", cwd, "Server root directory containing keys and served content")
 	flag.StringVar(&httpPort, "httpPort", "", "HTTP port. Overrides the value in the config file")
 	flag.StringVar(&httpsPort, "httpsPort", "", "HTTPS port. Overrides the value in the config file")
-	flag.StringVar(&configFile, "configFile", "config.ini", "Configuration file")
-	flag.BoolVar(&genChannels, "genChannels", false, "Generate channels.json file from config.ini values")
+	flag.StringVar(&configFile, "configFile", "config.yaml", "Configuration file")
+	flag.BoolVar(&genChannels, "genChannels", false, "Generate channels.json file from config.yaml values")
 	flag.BoolVar(&genKeys, "genKeys", false, "Generate GPG keys and keychains")
 }
 
@@ -113,6 +107,66 @@ func initPaths() {
 	os.MkdirAll(poolPath, 0755)
 	gpgPath = filepath.Join(wwwPath, "gpg")
 	channelPath = filepath.Join(wwwPath, "channels.json")
+}
+
+// BasicAuth is used to support HTTP Basic Access Authentication
+type BasicAuth struct {
+	Realm    string
+	Username string
+	Password string
+}
+
+// Config holds application configuration settings
+type Config struct {
+	Server struct {
+		Hostname  string
+		HTTPPort  string `yaml:"httpPort"`
+		HTTPSPort string `yaml:"httpsPort"`
+	}
+	Auth     *BasicAuth
+	Upstream struct {
+		Device        string
+		ReplaceDevice bool `yaml:"replaceDevice"`
+		ReplaceCustom bool `yaml:"replaceCustom"`
+	}
+	Channels struct {
+		Channels []string
+		Devices  []string
+	}
+}
+
+// readYAMLConfig reads a YAML config file
+func readYAMLConfig(fileName string) (*Config, error) {
+	b, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &Config{}
+	err = yaml.Unmarshal(b, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+var config *Config
+
+// loadConfig reads the options set in the config file
+// and uses the commandline flags to override some
+func loadConfig(path string) *Config {
+	config, err := readYAMLConfig(path)
+	if err != nil {
+		log.Fatalf("Error loading config file: %s\n", err)
+	}
+	if httpPort == "" {
+		httpPort = config.Server.HTTPPort
+	}
+	if httpsPort == "" {
+		httpsPort = config.Server.HTTPSPort
+	}
+
+	return config
 }
 
 // exists returns true if a file exists at the given path
@@ -186,7 +240,7 @@ var ubuntuIndices = make([]*IndexFile, 0)
 
 func fileChanged(path string) {
 	for _, index := range ubuntuIndices {
-		if replaceDevice && index.deviceTarball != nil && index.deviceTarball.absPath == path {
+		if config.Upstream.ReplaceDevice && index.deviceTarball != nil && index.deviceTarball.absPath == path {
 			index.deviceTarball.needsUpdate = true
 			index.update()
 		}
@@ -233,7 +287,7 @@ func loadKeys() {
 
 // authError is called when authentication fails and returns a HTTP error response
 func authError(resp http.ResponseWriter, basicAuth *BasicAuth) {
-	resp.Header().Set("WWW-Authenticate", `Basic: realm="`+basicAuth.realm+`"`)
+	resp.Header().Set("WWW-Authenticate", `Basic: realm="`+basicAuth.Realm+`"`)
 	resp.WriteHeader(401)
 	resp.Write([]byte("401 Unauthorized"))
 
@@ -255,7 +309,7 @@ func basicAuthHandler(basicAuth *BasicAuth, h http.Handler) http.Handler {
 				authError(resp, basicAuth)
 				return
 			}
-			if string(b) != basicAuth.username+":"+basicAuth.password {
+			if string(b) != basicAuth.Username+":"+basicAuth.Password {
 				authError(resp, basicAuth)
 				return
 			}
@@ -275,7 +329,7 @@ func startWebserver() {
 	if !exists(gpgPath) {
 		log.Fatal("No GPG keys found under www/gpg, try running go generate_keys.go")
 	}
-	http.Handle("/", basicAuthHandler(credentials, http.StripPrefix("/", http.FileServer(http.Dir(wwwPath)))))
+	http.Handle("/", basicAuthHandler(config.Auth, http.StripPrefix("/", http.FileServer(http.Dir(wwwPath)))))
 	if httpPort != "" {
 		log.Printf("Starting HTTP server on port %s\n", httpPort)
 		go http.ListenAndServe(":"+httpPort, nil)
@@ -332,7 +386,7 @@ func (index *IndexFile) fixupLinks() {
 
 // update updates the index file when relevant files change
 func (index *IndexFile) update() {
-	if replaceDevice {
+	if config.Upstream.ReplaceDevice {
 		index.deviceTarball.Update()
 	}
 	if index.isCustom {
@@ -343,7 +397,7 @@ func (index *IndexFile) update() {
 	if !strings.HasSuffix(filepath.Base(filepath.Dir(index.path)), "mako") {
 		for _, img := range index.Images {
 			if img.Type == fullImage {
-				if replaceDevice {
+				if config.Upstream.ReplaceDevice {
 					// replace the device tarball entry
 					img.Files[1] = index.deviceTarball
 				}
@@ -389,7 +443,7 @@ func createIndices() {
 	f, err := os.Open(channelPath)
 	if err != nil {
 		log.Println("Could not open channels file")
-		log.Fatal("Add devices and channels to config.ini then run imageserver -genChannels")
+		log.Fatal("Add devices and channels to config.yaml then run imageserver -genChannels")
 	}
 	channels := Channels{}
 	dec := json.NewDecoder(f)
@@ -428,7 +482,7 @@ func findTarball(channel, device, pattern string) (tarball *TarballEntry) {
 
 // createIndex fetches an Ubuntu index.json file and modifies for local use
 func createIndex(channel, device string) {
-	ubuntuIndex, err := getUbuntuIndex(channel, upstreamDevice)
+	ubuntuIndex, err := getUbuntuIndex(channel, config.Upstream.Device)
 	if err != nil {
 		return
 	}
@@ -436,15 +490,15 @@ func createIndex(channel, device string) {
 	os.MkdirAll(devicePath, 0755)
 	ubuntuIndex.path = filepath.Join(devicePath, "index.json")
 
-	if replaceDevice {
+	if config.Upstream.ReplaceDevice {
 		ubuntuIndex.deviceTarball = findTarball(channel, device, "device")
 		if ubuntuIndex.deviceTarball == nil {
 			log.Fatalf("Did not find a device tarball for %s %s\n", device, channel)
 		}
 	}
-	if replaceCustom {
+	if config.Upstream.ReplaceCustom {
 		ubuntuIndex.customTarball = findTarball(channel, device, "custom")
-		ubuntuIndex.isCustom = replaceCustom && ubuntuIndex.customTarball != nil &&
+		ubuntuIndex.isCustom = config.Upstream.ReplaceCustom && ubuntuIndex.customTarball != nil &&
 			len(ubuntuIndex.Images) > 0 &&
 			len(ubuntuIndex.Images[0].Files) == 4
 	}
@@ -459,87 +513,11 @@ func ensureSignatures() {
 	}
 }
 
-// BasicAuth is used to support HTTP Basic Access Authentication
-type BasicAuth struct {
-	realm    string
-	username string
-	password string
-}
-
-var credentials *BasicAuth
-
-var config ini.File
-
-// readConfig reads the options set in the config file
-func readConfig(path string) {
-	var err error
-	if exists(path) {
-		config, err = ini.LoadFile(path)
-		if err != nil {
-			log.Printf("Error loading config file: %s\n", err)
-			return
-		}
-	}
-
-	if config != nil {
-		readAuthCredentials(config)
-		readPorts(config)
-		readHostname(config)
-		readUpstreamDevice(config)
-	}
-}
-
-// read upstream device channels to mirror from the config file
-func readUpstreamDevice(f ini.File) {
-	upstreamDevice, _ = f.Get("upstream", "device")
-	replDevice, _ := f.Get("upstream", "replace_device")
-	if replDevice == "true" {
-		replaceDevice = true
-	}
-	replCustom, _ := f.Get("upstream", "replace_custom")
-	if replCustom == "true" {
-		replaceCustom = true
-	}
-}
-
-// read hostname from the config file
-func readHostname(f ini.File) {
-	hostName, _ = f.Get("server", "hostname")
-}
-
-// readPorts reads the HTTP and HTTPS ports from the config file
-// unless they are overriden by command line flags
-func readPorts(f ini.File) {
-	if httpPort == "" {
-		httpPort, _ = f.Get("ports", "http")
-	}
-	if httpsPort == "" {
-		httpsPort, _ = f.Get("ports", "https")
-	}
-}
-
-// readAuthCredentials reads the optional HTTP Basic Auth credentials from the config file
-func readAuthCredentials(f ini.File) {
-	r, ok := f.Get("auth", "realm")
-	if !ok {
-		return
-	}
-	u, ok := f.Get("auth", "username")
-	if !ok {
-		return
-	}
-	p, ok := f.Get("auth", "password")
-	if !ok {
-		return
-	}
-	credentials = &BasicAuth{realm: r, username: u, password: p}
-}
-
 // setup does various initializations at program startup
 func setup() {
 	flag.Parse()
 	initPaths()
-	readConfig(configFile)
+	config = loadConfig(configFile)
 	if !genKeys {
 		loadKeys()
 		ensureSignatures()
@@ -575,21 +553,14 @@ func (ch *Channels) save() {
 }
 
 // generateChannels creates a channels.json file from channel and device
-// configuration from config.ini
+// configuration from config.yaml
 func generateChannels() {
 	if exists(channelPath) {
 		log.Fatal("channels.json already exists, not overwriting it.")
 	}
 	ch := &Channels{}
-
-	channels, _ := config.Get("channels", "channels")
-	channels = strings.Replace(channels, " ", "", -1)
-
-	devices, _ := config.Get("channels", "devices")
-	devices = strings.Replace(devices, " ", "", -1)
-
-	for _, c := range strings.Split(channels, ",") {
-		for _, d := range strings.Split(devices, ",") {
+	for _, c := range config.Channels.Channels {
+		for _, d := range config.Channels.Devices {
 			ch.add(c, d)
 		}
 	}
