@@ -29,7 +29,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +54,8 @@ type IndexFile struct {
 	Global        map[string]string `json:"global"`
 	Images        []Image           `json:"images"`
 	path          string
+	channel       string
+	device        string
 	deviceTarball *TarballEntry
 	customTarball *TarballEntry
 	isCustom      bool
@@ -384,6 +388,66 @@ func (index *IndexFile) fixupLinks() {
 	}
 }
 
+var channelTemplate = `[service]
+base: %s
+http_port: %s
+https_port: %s
+channel: %s
+device: %s
+build_number: %d
+version_detail: version=%d
+`
+
+func makeVersionTarball(version int, channel, device string) error {
+	tarballpath := filepath.Join(wwwPath, channel, device, "version-"+strconv.Itoa(version)+".tar.xz", ".")
+
+	if exists(tarballpath) {
+		return nil
+	}
+
+	tmpdir, err := ioutil.TempDir(os.TempDir(), "versiontarball")
+	if err != nil {
+		return err
+	}
+
+	defer os.RemoveAll(tmpdir)
+
+	sipath := filepath.Join(tmpdir, "system", "etc", "system-image")
+	os.MkdirAll(sipath, 0755)
+
+	ioutil.WriteFile(filepath.Join(tmpdir, "system", "etc", "ubuntu-build"), []byte(strconv.Itoa(version)+"\n"), 0644)
+
+	http := httpPort
+	if http == "" {
+		http = "disabled"
+	}
+	https := httpsPort
+	if https == "" {
+		https = "disabled"
+	}
+	channelDesc := fmt.Sprintf(channelTemplate, config.Server.Hostname, http, https, channel, device, version, version)
+
+	ioutil.WriteFile(filepath.Join(sipath, "channel.ini"), []byte(channelDesc), 0644)
+	// This would be cleaner in Go without relying on xz and tar being available, but this is simpler for now.
+	cmd := exec.Command("tar", "-C", tmpdir, "-cJf", tarballpath, ".")
+	return cmd.Run()
+}
+
+func versionTarballEntry(version int, channel, device string, pos int) (*TarballEntry, error) {
+	err := makeVersionTarball(version, channel, device)
+	if err != nil {
+		return nil, err
+	}
+
+	path := filepath.Join("/", channel, device)
+	tarball := NewTarballEntry("version-"+strconv.Itoa(version), path, pos)
+	if tarball == nil {
+		return nil, fmt.Errorf("Could not create tarball entry for %s\n", path)
+	}
+	tarball.Update()
+	return tarball, nil
+}
+
 // update updates the index file when relevant files change
 func (index *IndexFile) update() {
 	if config.Upstream.ReplaceDevice {
@@ -406,6 +470,15 @@ func (index *IndexFile) update() {
 				if index.isCustom {
 					img.Files[2] = index.customTarball
 				}
+
+				//replace the version tarball entry if there's a local tarball for this version
+				pos := len(img.Files) - 1
+				tarball, err := versionTarballEntry(img.Version, index.channel, index.device, pos)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				img.Files[pos] = tarball
 			}
 		}
 	}
@@ -486,6 +559,8 @@ func createIndex(channel, device string) {
 	if err != nil {
 		return
 	}
+	ubuntuIndex.device = device
+	ubuntuIndex.channel = channel
 	devicePath := filepath.Join(wwwPath, channel, device)
 	os.MkdirAll(devicePath, 0755)
 	ubuntuIndex.path = filepath.Join(devicePath, "index.json")
