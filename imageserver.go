@@ -429,7 +429,8 @@ func makeVersionTarball(version int, channel, device string) error {
 
 	ioutil.WriteFile(filepath.Join(sipath, "channel.ini"), []byte(channelDesc), 0644)
 	// This would be cleaner in Go without relying on xz and tar being available, but this is simpler for now.
-	cmd := exec.Command("tar", "-C", tmpdir, "-cJf", tarballpath, ".")
+	cmd := exec.Command("tar", "--numeric-owner", "--owner=root", "--group=root", "-cJf", tarballpath, "system")
+	cmd.Dir = tmpdir
 	return cmd.Run()
 }
 
