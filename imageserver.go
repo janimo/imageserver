@@ -58,7 +58,7 @@ type IndexFile struct {
 	device        string
 	deviceTarball *TarballEntry
 	customTarball *TarballEntry
-	isCustom      bool
+	replaceCustom bool
 }
 
 // Image represents a given image within a channel
@@ -254,7 +254,7 @@ func fileChanged(path string) {
 			index.deviceTarball.needsUpdate = true
 			index.update()
 		}
-		if index.isCustom && index.customTarball.absPath == path {
+		if index.replaceCustom && index.customTarball.absPath == path {
 			index.customTarball.needsUpdate = true
 			index.update()
 		}
@@ -448,7 +448,7 @@ func (index *IndexFile) update() {
 	if config.Upstream.ReplaceDevice {
 		index.deviceTarball.Update()
 	}
-	if index.isCustom {
+	if index.replaceCustom {
 		index.customTarball.Update()
 	}
 	index.Global["generated_at"] = currentTimestamp()
@@ -462,7 +462,7 @@ func (index *IndexFile) update() {
 				}
 				// replace the custom tarball entry.
 				// FIXME: assumption that 4 entries mean there's a custom tarball in there
-				if index.isCustom {
+				if index.replaceCustom {
 					img.Files[2] = index.customTarball
 				}
 
@@ -568,7 +568,7 @@ func createIndex(channel, device string) {
 	}
 	if config.Upstream.ReplaceCustom {
 		ubuntuIndex.customTarball = findTarball(channel, device, "custom")
-		ubuntuIndex.isCustom = config.Upstream.ReplaceCustom && ubuntuIndex.customTarball != nil &&
+		ubuntuIndex.replaceCustom = config.Upstream.ReplaceCustom && ubuntuIndex.customTarball != nil &&
 			len(ubuntuIndex.Images) > 0 &&
 			len(ubuntuIndex.Images[0].Files) == 4
 	}
