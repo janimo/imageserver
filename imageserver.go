@@ -173,10 +173,14 @@ func loadConfig(path string) *Config {
 	return config
 }
 
-// exists returns true if a file exists at the given path
+// exists returns true if a file or directory exists at the given path and can be opened
 func exists(path string) bool {
-	_, err := os.Lstat(path)
-	return err == nil
+	f, err := os.Open(path)
+	if err == nil {
+		return true
+	}
+	f.Close()
+	return false
 }
 
 // NewTarballEntry creates a tarball of a given name
