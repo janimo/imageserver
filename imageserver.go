@@ -85,7 +85,9 @@ var (
 	appRootPath string
 	wwwPath     string
 	poolPath    string
-	gpgPath     string
+	gpgDir      string
+	keysDir     string
+	certsDir    string
 	channelPath string
 
 	httpPort    string
@@ -109,7 +111,9 @@ func initPaths() {
 	wwwPath = filepath.Join(appRootPath, "www")
 	poolPath = filepath.Join(wwwPath, "pool")
 	os.MkdirAll(poolPath, 0755)
-	gpgPath = filepath.Join(wwwPath, "gpg")
+	gpgDir = filepath.Join(wwwPath, "gpg")
+	keysDir = filepath.Join(appRootPath, "keys", "gpg")
+	certsDir = filepath.Join(appRootPath, "keys", "ssl")
 	channelPath = filepath.Join(wwwPath, "channels.json")
 }
 

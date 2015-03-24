@@ -230,9 +230,9 @@ func addFile(name string, tarname string, tw *tar.Writer) error {
 }
 
 func createKeyrings() error {
-	os.MkdirAll(gpgPath, 0700)
+	os.MkdirAll(gpgDir, 0700)
 	for d, k := range signingKeys {
-		p := filepath.Join(gpgPath, d) + ".tar.xz"
+		p := filepath.Join(gpgDir, d) + ".tar.xz"
 		log.Printf("Creating %s keyring tarball\n", d)
 		if err := tarDirectory(k.dir, p); err != nil {
 			return err
