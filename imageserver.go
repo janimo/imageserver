@@ -58,6 +58,7 @@ type IndexFile struct {
 	device        string
 	deviceTarball *TarballEntry
 	customTarball *TarballEntry
+	replaceDevice bool
 	replaceCustom bool
 }
 
@@ -250,7 +251,7 @@ var ubuntuIndices = make([]*IndexFile, 0)
 
 func fileChanged(path string) {
 	for _, index := range ubuntuIndices {
-		if config.Upstream.ReplaceDevice && index.deviceTarball != nil && index.deviceTarball.absPath == path {
+		if index.replaceDevice && index.deviceTarball.absPath == path {
 			index.deviceTarball.needsUpdate = true
 			index.update()
 		}
@@ -445,7 +446,7 @@ func versionTarballEntry(version int, channel, device string, pos int) (*Tarball
 
 // update updates the index file when relevant files change
 func (index *IndexFile) update() {
-	if config.Upstream.ReplaceDevice {
+	if index.replaceDevice {
 		index.deviceTarball.Update()
 	}
 	if index.replaceCustom {
@@ -456,7 +457,7 @@ func (index *IndexFile) update() {
 	if !strings.HasSuffix(filepath.Base(filepath.Dir(index.path)), "mako") {
 		for _, img := range index.Images {
 			if img.Type == fullImage {
-				if config.Upstream.ReplaceDevice {
+				if index.replaceDevice {
 					// replace the device tarball entry
 					img.Files[1] = index.deviceTarball
 				}
@@ -531,7 +532,7 @@ func createIndices() {
 // findTarball finds a tarball for a device/channel/pattern combination
 // to be used as the device or custom tarball entry in the respective index.json
 // The name can be device_mako_trusty-proposed.tar.xz, device_mako.tar.xz or just device.tar.xz
-func findTarball(channel, device, pattern string) (tarball *TarballEntry) {
+func findTarball(channel, device, pattern string) *TarballEntry {
 	//From most specific to most general name
 	candidates := []string{
 		pattern + "_" + device + "_" + strings.Replace(channel, "/", "_", -1),
@@ -539,13 +540,14 @@ func findTarball(channel, device, pattern string) (tarball *TarballEntry) {
 		pattern,
 	}
 	for _, name := range candidates {
-		tarball = NewTarballEntry(name, "/pool", 1)
+		tarball := NewTarballEntry(name, "/pool", 1)
 		if tarball != nil {
 			log.Printf("Found %s tarball for %s %s\n", pattern, device, channel)
-			break
+			return tarball
 		}
 	}
-	return
+	log.Printf("Found no %s tarball for %s %s\n", pattern, device, channel)
+	return nil
 }
 
 // createIndex fetches an Ubuntu index.json file and modifies for local use
@@ -562,13 +564,11 @@ func createIndex(channel, device string) {
 
 	if config.Upstream.ReplaceDevice {
 		ubuntuIndex.deviceTarball = findTarball(channel, device, "device")
-		if ubuntuIndex.deviceTarball == nil {
-			log.Fatalf("Did not find a device tarball for %s %s\n", device, channel)
-		}
+		ubuntuIndex.replaceDevice = ubuntuIndex.deviceTarball != nil
 	}
 	if config.Upstream.ReplaceCustom {
 		ubuntuIndex.customTarball = findTarball(channel, device, "custom")
-		ubuntuIndex.replaceCustom = config.Upstream.ReplaceCustom && ubuntuIndex.customTarball != nil &&
+		ubuntuIndex.replaceCustom = ubuntuIndex.customTarball != nil &&
 			len(ubuntuIndex.Images) > 0 &&
 			len(ubuntuIndex.Images[0].Files) == 4
 	}
