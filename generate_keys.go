@@ -36,7 +36,6 @@ import (
 
 const (
 	secretKeyDir = "keys/gpg"
-	wwwKeyDir    = "www/gpg"
 )
 
 type keyringJSON struct {
@@ -231,8 +230,9 @@ func addFile(name string, tarname string, tw *tar.Writer) error {
 }
 
 func createKeyrings() error {
+	os.MkdirAll(gpgPath, 0700)
 	for d, k := range signingKeys {
-		p := filepath.Join(wwwKeyDir, d) + ".tar.xz"
+		p := filepath.Join(gpgPath, d) + ".tar.xz"
 		log.Printf("Creating %s keyring tarball\n", d)
 		if err := tarDirectory(k.dir, p); err != nil {
 			return err
@@ -240,10 +240,6 @@ func createKeyrings() error {
 		signFile(p, signingKeys[k.signer].entity)
 	}
 	return nil
-}
-
-func init() {
-	os.MkdirAll(wwwKeyDir, 0700)
 }
 
 func generateKeys() {
