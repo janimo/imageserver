@@ -202,22 +202,24 @@ func NewTarballEntry(name string, dir string, order int) *TarballEntry {
 }
 
 // SetChecksum recalculates the SHA256 hash of the tarball
-func (e *TarballEntry) SetChecksum() {
+func (e *TarballEntry) SetChecksum() error {
 	b, err := ioutil.ReadFile(e.absPath)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	s := sha256.Sum256(b)
 	e.Checksum = fmt.Sprintf("%x", s)
+	return nil
 }
 
 // SetSize updates the size field of the tarball
-func (e *TarballEntry) SetSize() {
+func (e *TarballEntry) SetSize() error {
 	fi, err := os.Lstat(e.absPath)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	e.Size = fi.Size()
+	return nil
 }
 
 // Update updates the tarball entry fields
