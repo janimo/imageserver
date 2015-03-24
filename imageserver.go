@@ -330,9 +330,6 @@ func startWebserver() {
 		return
 	}
 
-	if !exists(gpgPath) {
-		log.Fatal("No GPG keys found under www/gpg, try running go generate_keys.go")
-	}
 	http.Handle("/", basicAuthHandler(config.Auth, http.StripPrefix("/", http.FileServer(http.Dir(wwwPath)))))
 	if httpPort != "" {
 		log.Printf("Starting HTTP server on port %s\n", httpPort)
