@@ -90,11 +90,9 @@ var (
 	certsDir    string
 	channelPath string
 
-	httpPort    string
-	httpsPort   string
-	configFile  string
-	genChannels bool
-	genKeys     bool
+	httpPort   string
+	httpsPort  string
+	configFile string
 )
 
 func init() {
@@ -103,8 +101,6 @@ func init() {
 	flag.StringVar(&httpPort, "httpPort", "", "HTTP port. Overrides the value in the config file")
 	flag.StringVar(&httpsPort, "httpsPort", "", "HTTPS port. Overrides the value in the config file")
 	flag.StringVar(&configFile, "configFile", "config.yaml", "Configuration file")
-	flag.BoolVar(&genChannels, "genChannels", false, "Generate channels.json file from config.yaml values")
-	flag.BoolVar(&genKeys, "genKeys", false, "Generate GPG keys and keychains")
 }
 
 func initPaths() {
@@ -270,15 +266,10 @@ func fileChanged(path string) {
 }
 
 func loadKeys() {
-	keydir := os.Getenv("IMAGESERVER_GPGKEYDIR")
-	if keydir == "" {
-		keydir = filepath.Join(appRootPath, "keys", "gpg")
-	}
-	secring := filepath.Join(keydir, "image-signing", "secring.gpg")
+	secring := filepath.Join(keysDir, "image-signing", "secring.gpg")
 	s, err := os.Open(secring)
 	if err != nil {
-		log.Printf("No secret keyring found in %s\n", keydir)
-		log.Fatal("Run imageserver -genKeys")
+		log.Fatalf("No secret keyring found in %s\n", keysDir)
 	}
 	defer s.Close()
 
@@ -346,18 +337,14 @@ func startWebserver() {
 		go http.ListenAndServe(":"+httpPort, nil)
 	}
 	if httpsPort != "" {
-		certdir := os.Getenv("IMAGESERVER_CERTDIR")
-		if certdir == "" {
-			certdir = filepath.Join(appRootPath, "keys", "ssl")
-		}
-		key := filepath.Join(certdir, "key.pem")
-		cert := filepath.Join(certdir, "cert.pem")
+		key := filepath.Join(certsDir, "key.pem")
+		cert := filepath.Join(certsDir, "cert.pem")
 		if !exists(key) || !exists(cert) {
-			log.Printf("Missing TLS certificates in %s, not starting HTTPS server\n", certdir)
+			log.Printf("Missing TLS certificates in %s, not starting HTTPS server\n", certsDir)
 			log.Println("Try go run generate_cert.go")
 			return
 		}
-		log.Printf("Starting HTTPS server on port %s, using TLS certificates in %s\n", httpsPort, certdir)
+		log.Printf("Starting HTTPS server on port %s, using TLS certificates in %s\n", httpsPort, certsDir)
 		go http.ListenAndServeTLS(":"+httpsPort, cert, key, nil)
 	}
 }
@@ -524,7 +511,7 @@ func createIndices() {
 	f, err := os.Open(channelPath)
 	if err != nil {
 		log.Println("Could not open channels file")
-		log.Fatal("Add devices and channels to config.yaml then run imageserver -genChannels")
+		log.Fatal("Add devices and channels to config.yaml then run again")
 	}
 	channels := Channels{}
 	dec := json.NewDecoder(f)
@@ -601,10 +588,10 @@ func setup() {
 	flag.Parse()
 	initPaths()
 	config = loadConfig(configFile)
-	if !genKeys {
-		loadKeys()
-		ensureSignatures()
-	}
+	generateKeys()
+	loadKeys()
+	ensureSignatures()
+	generateChannels()
 }
 
 // periodically calls a given function at regular intervals
@@ -639,7 +626,8 @@ func (ch *Channels) save() {
 // configuration from config.yaml
 func generateChannels() {
 	if exists(channelPath) {
-		log.Fatal("channels.json already exists, not overwriting it.")
+		log.Println("channels.json exists.")
+		return
 	}
 	ch := &Channels{}
 	for _, c := range config.Channels.Channels {
@@ -654,14 +642,6 @@ func generateChannels() {
 func main() {
 	fmt.Printf("Starting imageserver %s\n", appVersion)
 	setup()
-	if genChannels {
-		generateChannels()
-		return
-	}
-	if genKeys {
-		generateKeys()
-		return
-	}
 	go periodically(10*time.Minute, createIndices)
 	startWebserver()
 	watcher, err := inotify.NewWatcher()

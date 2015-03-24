@@ -239,6 +239,9 @@ func createKeyrings() error {
 }
 
 func generateKeys() {
+	if exists(gpgDir) && exists(keysDir) {
+		return
+	}
 	err := createGPGKeys()
 	if err != nil {
 		log.Fatal(err)
