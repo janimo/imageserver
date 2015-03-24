@@ -34,10 +34,6 @@ import (
 	"github.com/remyoudompheng/go-liblzma"
 )
 
-const (
-	secretKeyDir = "keys/gpg"
-)
-
 type keyringJSON struct {
 	Expiry int64  `json:"expiry,omitempty"`
 	Type   string `json:"type"`
@@ -157,7 +153,7 @@ func createGPGKeys() error {
 	for n, k := range signingKeys {
 		log.Printf("Creating %s GPG key\n", n)
 		k.typ = n
-		k.dir = filepath.Join(secretKeyDir, n)
+		k.dir = filepath.Join(keysDir, n)
 		err := k.generate()
 		if err != nil {
 			return err
